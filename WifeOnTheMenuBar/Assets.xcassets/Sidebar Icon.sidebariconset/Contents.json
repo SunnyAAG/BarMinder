@@ -13,6 +13,30 @@
       "size" : "16x16"
     },
     {
+      "filename" : "Rectangle 32__1.png",
+      "idiom" : "mac",
+      "scale" : "1x",
+      "size" : "18x18"
+    },
+    {
+      "filename" : "Rectangle 32__5.png",
+      "idiom" : "mac",
+      "scale" : "2x",
+      "size" : "18x18"
+    },
+    {
+      "filename" : "Rectangle 32__2.png",
+      "idiom" : "mac",
+      "scale" : "1x",
+      "size" : "24x24"
+    },
+    {
+      "filename" : "Rectangle 32__3.png",
+      "idiom" : "mac",
+      "scale" : "2x",
+      "size" : "24x24"
+    },
+    {
       "filename" : "Rectangle 32-2 1.png",
       "idiom" : "mac",
       "scale" : "1x",
@@ -23,41 +47,6 @@
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "32x32"
-    },
-    {
-      "filename" : "Rectangle 32.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "128x128"
-    },
-    {
-      "filename" : "Rectangle 32_!.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "128x128"
-    },
-    {
-      "filename" : "Rectangle 32_! 1.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "256x256"
-    },
-    {
-      "filename" : "Screenshot 2025-07-26 at 14.28.08.png",
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "256x256"
-    },
-    {
-      "filename" : "Screenshot 2025-07-26 at 14.28.08 1.png",
-      "idiom" : "mac",
-      "scale" : "1x",
-      "size" : "512x512"
-    },
-    {
-      "idiom" : "mac",
-      "scale" : "2x",
-      "size" : "512x512"
     }
   ],
   "info" : {

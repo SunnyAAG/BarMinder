@@ -13,7 +13,7 @@ struct WifeOnTheMenuBarApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView() // No system settings
+            EmptyView()
         }
     }
 }

@@ -45,63 +45,101 @@ struct SettingsView: View {
                     .cornerRadius(6)
             }
             .padding(.top, 8)
-            
+
+            // ✅ Preview button
             Button("Send Preview Notification") {
                 sendPreviewNotification()
             }
             .padding(.top, 8)
 
-
             Spacer()
         }
         .padding()
         .frame(width: 280, height: 270)
-        .onChange(of: notificationMessage) {oldValue, newValue in
+        .onChange(of: notificationMessage) { _, _ in
             scheduleDailyNotification(hour: notificationHour, minute: notificationMinute)
         }
-        .onChange(of: notificationsEnabled) {oldValue, newValue in
+        .onChange(of: notificationsEnabled) { _, _ in
             scheduleDailyNotification(hour: notificationHour, minute: notificationMinute)
         }
     }
 
+    // ✅ Load saved image from UserDefaults
+    private func loadSavedImage() -> NSImage? {
+        if let imageData = UserDefaults.standard.data(forKey: "SavedImageData") {
+            return NSImage(data: imageData)
+        }
+        return nil
+    }
+
+    // ✅ Schedule daily notification (with image)
     func scheduleDailyNotification(hour: Int, minute: Int) {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
 
-        if notificationsEnabled {
-            let content = UNMutableNotificationContent()
-            content.title = "💕 Reminder"
-            content.body = notificationMessage
-            content.sound = .default
+        guard notificationsEnabled else { return }
 
-            var dateComponents = DateComponents()
-            dateComponents.hour = hour
-            dateComponents.minute = minute
+        let content = UNMutableNotificationContent()
+        content.title = "💕 Reminder"
+        content.body = notificationMessage
+        content.sound = .default
 
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-
-            let request = UNNotificationRequest(identifier: "dailyNotification",
-                                                content: content,
-                                                trigger: trigger)
-
-            UNUserNotificationCenter.current().add(request)
+        // 🔗 Attach the image if it exists
+        if let image = loadSavedImage(),
+           let attachment = createImageAttachment(from: image) {
+            content.attachments = [attachment]
         }
+
+        var dateComponents = DateComponents()
+        dateComponents.hour = hour
+        dateComponents.minute = minute
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+
+        let request = UNNotificationRequest(identifier: "dailyNotification",
+                                            content: content,
+                                            trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request)
     }
+
+    // ✅ Send preview notification (with image)
     func sendPreviewNotification() {
         let content = UNMutableNotificationContent()
         content.title = "💕 Preview Notification"
         content.body = notificationMessage
         content.sound = .default
 
+        // 🔗 Attach the image if it exists
+        if let image = loadSavedImage(),
+           let attachment = createImageAttachment(from: image) {
+            content.attachments = [attachment]
+        }
+
         let request = UNNotificationRequest(identifier: UUID().uuidString,
                                             content: content,
-                                            trigger: nil) // immediate trigger
+                                            trigger: nil) // send immediately
 
         UNUserNotificationCenter.current().add(request)
     }
 
+    // ✅ Helper: Convert NSImage → temp file → attachment
+    private func createImageAttachment(from image: NSImage) -> UNNotificationAttachment? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("notifImage.png")
+        do {
+            try pngData.write(to: tempURL)
+            return try UNNotificationAttachment(identifier: "notifImage", url: tempURL)
+        } catch {
+            print("❌ Could not save or attach image: \(error)")
+            return nil
+        }
+    }
 }
-
-
 
 #Preview {
     SettingsView()
