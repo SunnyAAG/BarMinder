@@ -9,120 +9,139 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PopoverView: View {
-    @State private var image: NSImage? = nil
+    @State private var image: NSImage?
+    @AppStorage("popoverTitle") private var popoverTitle = "Your MenuBar Photo"
     var appDelegate: AppDelegate
-
     var body: some View {
-        VStack(spacing: 5) {
-            // ✅ Show current image or fallback
-            if let nsImage = image {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .clipped()
+        VStack(spacing: 12) {
+            Text(popoverTitle.isEmpty ? "Your MenuBar Photo" : popoverTitle)
+                .font(.headline)
+                .padding(.top, 20)
+            
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.1))
                     .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.top, 10)
-            } else {
-                Text("No image selected.")
+                    .shadow(radius: 2)
+                
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 200, height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    Text("Drop an image here")
+                        .foregroundColor(.gray)
+                        .font(.caption)
+                }
             }
+            .onDrop(of: [.fileURL], isTargeted: nil, perform: handleDrop)
+            
+            VStack(spacing: 8) {
+                Button {
+                    selectNewImage()
+                } label: {
+                    Label("Change Photo", systemImage: "photo.on.rectangle")
+                }
 
-            // ✅ Change photo button
-            Button("Change Photo") {
-                selectNewImage()
+                Button {
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenSettings"), object: nil)
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
+                    Label("Exit", systemImage: "xmark.circle")
+                        .foregroundColor(.red)
+                }
+
             }
-            .padding(.top, 5)
-
-            // ✅ Exit button
-            Button("Exit") {
-                NSApp.terminate(nil)
-            }
-            .padding(.top, 5)
-            .foregroundColor(.red)
-
-            // ✅ Settings button
-            Button("Settings ⚙️") {
-                NotificationCenter.default.post(name: NSNotification.Name("OpenSettings"), object: nil)
-            }
-            .padding(.top, 5)
-
+            .padding(.top, 4)
+            
             Spacer()
         }
         .padding()
-        .frame(width: 250, height: 310)
-        .onAppear {
-            // ✅ Only load once, not on every re-render
-            if image == nil {
-                image = loadCurrentImage()
-            }
+        .frame(width: 250, height: 350)
+        .onAppear(perform: loadSavedImage)
+    }
+    
+    private func loadSavedImage() {
+        guard image == nil else { return }
+        if let data = UserDefaults.standard.data(forKey: "SavedImageData"),
+           let savedImage = NSImage(data: data) {
+            image = savedImage
+        } else {
+            image = NSImage(named: "wifeIcon")
         }
     }
-
-    // ✅ Load once from UserDefaults
-    private func loadCurrentImage() -> NSImage? {
-        if let imageData = UserDefaults.standard.data(forKey: "SavedImageData"),
-           let nsImage = NSImage(data: imageData) {
-            return nsImage
-        }
-        return NSImage(named: "wifeIcon") // fallback image
-    }
-
-    // ✅ Run PNG saving in background
-    private func saveImageToDefaults(_ image: NSImage) {
-        // Convert NSImage to PNG Data *before* going async
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return
-        }
-
+    
+    private func saveImage(_ image: NSImage) {
+        guard
+            let tiff = image.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else { return }
+        
         DispatchQueue.global(qos: .utility).async {
-            // Now only safe 'Data' is captured inside the closure
             UserDefaults.standard.set(pngData, forKey: "SavedImageData")
         }
     }
-
-
-    func selectNewImage() {
+    
+    private func selectNewImage() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .heif]
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.title = "Select a new photo"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            guard let newImage = NSImage(contentsOf: url) else { return }
-            guard let croppedImage = cropToSquare(image: newImage) else { return }
-
-            // Prepare PNG data before async closure
-            guard let tiff = croppedImage.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiff),
-                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                return
-            }
-
-            // Update UI on main thread
-            self.image = croppedImage
-            self.appDelegate.setMenuBarImage(croppedImage)
-
-            // Save PNG data asynchronously — pngData is Sendable
-            DispatchQueue.global(qos: .utility).async {
-                UserDefaults.standard.set(pngData, forKey: "SavedImageData")
+        
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        loadImage(from: url)
+    }
+    
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            if
+                let data = item as? Data,
+                let url = URL(dataRepresentation: data, relativeTo: nil)
+            {
+                DispatchQueue.main.async {
+                    loadImage(from: url)
+                }
             }
         }
+        return true
     }
-
-
-
-    // ✅ Crops any image to square, safe for large images
-    func cropToSquare(image: NSImage) -> NSImage? {
+    
+    private func loadImage(from url: URL) {
+        guard
+            let newImage = NSImage(contentsOf: url),
+            let cropped = cropToSquare(newImage)
+        else { return }
+        
+        image = cropped
+        appDelegate.setMenuBarImage(cropped)
+        saveImage(cropped)
+    }
+    
+    private func cropToSquare(_ image: NSImage) -> NSImage? {
         let size = min(image.size.width, image.size.height)
-        let x = (image.size.width - size) / 2
-        let y = (image.size.height - size) / 2
-        let cropRect = NSRect(x: x, y: y, width: size, height: size)
-
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let croppedCG = cgImage.cropping(to: cropRect) else { return nil }
-
+        let rect = NSRect(
+            x: (image.size.width - size) / 2,
+            y: (image.size.height - size) / 2,
+            width: size,
+            height: size
+        )
+        
+        guard
+            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+            let croppedCG = cgImage.cropping(to: rect)
+        else { return nil }
+        
         return NSImage(cgImage: croppedCG, size: NSSize(width: size, height: size))
     }
 }

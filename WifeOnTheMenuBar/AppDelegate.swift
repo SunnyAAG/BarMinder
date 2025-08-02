@@ -10,67 +10,71 @@ import SwiftUI
 import UserNotifications
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    var statusItem: NSStatusItem!
-    let popover = NSPopover()
-    let settingsPopover = NSPopover()
+    private var statusItem: NSStatusItem!
+    private let popover = NSPopover()
+    private let settingsPopover = NSPopover()
 
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
+    
+    // MARK: - App Launch
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        setupStatusItem()
+        setupPopovers()
+        requestNotificationPermission()
+    }
+
+    private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        guard let button = statusItem.button else { return }
+        button.action = #selector(togglePopover(_:))
+        updateIconFromDefaults()
+    }
 
-        if let button = statusItem.button {
-            button.action = #selector(togglePopover(_:))
-            updateIconFromDefaults()
-        }
+    private func setupPopovers() {
         let contentView = PopoverView(appDelegate: self)
         popover.contentSize = NSSize(width: 250, height: 300)
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(rootView: contentView)
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if granted {
-                print("Notifications allowed")
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                if granted { print("Notifications allowed") }
             }
-        }
     }
 
     // MARK: - Popover Management
-
-    @objc func togglePopover(_ sender: Any?) {
-        if let button = statusItem.button {
-            if settingsPopover.isShown {
-                settingsPopover.performClose(nil)
-            }
-
-            if popover.isShown {
-                popover.performClose(sender)
-            } else {
-                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            }
-        }
+    @objc private func togglePopover(_ sender: Any?) {
+        guard let button = statusItem.button else { return }
+        if settingsPopover.isShown { settingsPopover.performClose(nil) }
+        popover.isShown ? popover.performClose(sender)
+                        : popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
-    @objc func openSettings() {
-        if let button = statusItem.button {
-            if popover.isShown {
-                popover.performClose(nil)
-            }
+    @objc private func openSettings() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown { popover.performClose(nil) }
 
-            settingsPopover.contentSize = NSSize(width: 300, height: 180)
-            settingsPopover.behavior = .transient
-            settingsPopover.contentViewController = NSHostingController(rootView: SettingsView())
-            settingsPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
+        settingsPopover.contentSize = NSSize(width: 300, height: 180)
+        settingsPopover.behavior = .semitransient
+        settingsPopover.contentViewController = NSHostingController(rootView: SettingsView())
+        settingsPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     override init() {
         super.init()
-        NotificationCenter.default.addObserver(self, selector: #selector(openSettings), name: NSNotification.Name("OpenSettings"), object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(openSettings),
+            name: NSNotification.Name("OpenSettings"),
+            object: nil
+        )
     }
 
     // MARK: - Menu Bar Icon
-
     func updateIconFromDefaults() {
-        if let imageData = UserDefaults.standard.data(forKey: "SavedImageData"),
-           let nsImage = NSImage(data: imageData) {
+        if let data = UserDefaults.standard.data(forKey: "SavedImageData"),
+           let nsImage = NSImage(data: data) {
             setMenuBarImage(nsImage)
         } else {
             setDefaultImage()
@@ -78,11 +82,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setMenuBarImage(_ image: NSImage) {
-        let resized = NSImage(size: NSSize(width: 22, height: 22))
+        // 🎯 Resize icon to fit menu bar perfectly
+        let targetSize = NSSize(width: 22, height: 22)
+        let resized = NSImage(size: targetSize)
         resized.lockFocus()
-        image.draw(in: NSRect(x: 0, y: 0, width: 22, height: 22))
+        image.draw(in: NSRect(origin: .zero, size: targetSize),
+                   from: .zero,
+                   operation: .sourceOver,
+                   fraction: 1.0)
         resized.unlockFocus()
-
         resized.isTemplate = false
         statusItem.button?.image = resized
     }
@@ -93,42 +101,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Notifications
-
+    // MARK: - Notifications (Swift Concurrency)
     func sendNotification(title: String, body: String, image: NSImage? = nil) {
-        var pngData: Data? = nil
-        if let image = image,
-           let tiffData = image.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: tiffData) {
-            pngData = bitmap.representation(using: .png, properties: [:])
-        }
-        DispatchQueue.global(qos: .utility).async {
+        Task {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
-            content.sound = UNNotificationSound.default
+            content.sound = .default
 
-            if let data = pngData {
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("notifImage.png")
-                do {
-                    try data.write(to: tempURL)
-                    if let attachment = try? UNNotificationAttachment(identifier: "notifImage",
-                                                                      url: tempURL,
-                                                                      options: nil) {
-                        content.attachments = [attachment]
-                    }
-                } catch {
-                    print("Could not save temp image: \(error)")
-                }
+            if let attachment = await makeImageAttachment(from: image) {
+                content.attachments = [attachment]
             }
 
-            let request = UNNotificationRequest(identifier: UUID().uuidString,
-                                                content: content,
-                                                trigger: nil)
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
 
-            UNUserNotificationCenter.current().add(request)
+            try? await UNUserNotificationCenter.current().add(request)
         }
     }
 
+    private func makeImageAttachment(from image: NSImage?) async -> UNNotificationAttachment? {
+        guard let image = image,
+              let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
 
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("notifImage.png")
+        do {
+            try pngData.write(to: tempURL)
+            return try UNNotificationAttachment(identifier: "notifImage", url: tempURL)
+        } catch {
+            print("Could not create notification attachment: \(error)")
+            return nil
+        }
+    }
 }

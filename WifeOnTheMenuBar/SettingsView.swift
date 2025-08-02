@@ -13,23 +13,26 @@ struct SettingsView: View {
     @AppStorage("notificationHour") private var notificationHour = 9
     @AppStorage("notificationMinute") private var notificationMinute = 0
     @AppStorage("notificationMessage") private var notificationMessage = "Here’s a daily note from your WifeOnTheMenuBar."
+    @AppStorage("popoverTitle") private var popoverTitle = "Your MenuBar Photo"
 
     var body: some View {
         VStack(spacing: 15) {
-            Toggle("Enable Notifications", isOn: $notificationsEnabled)
+            VStack{
+                Toggle("Enable Notifications", isOn: $notificationsEnabled)
+            }
+            .padding(.top, 20)
 
             HStack {
                 Text("Send Daily At:")
                 DatePicker("", selection: Binding(
                     get: {
-                        let cal = Calendar.current
-                        return cal.date(from: DateComponents(hour: notificationHour, minute: notificationMinute)) ?? Date()
+                        Calendar.current.date(from: DateComponents(hour: notificationHour, minute: notificationMinute)) ?? Date()
                     },
                     set: { newDate in
                         let cal = Calendar.current
                         notificationHour = cal.component(.hour, from: newDate)
                         notificationMinute = cal.component(.minute, from: newDate)
-                        scheduleDailyNotification(hour: notificationHour, minute: notificationMinute)
+                        scheduleDailyNotification()
                     }
                 ), displayedComponents: .hourAndMinute)
                 .labelsHidden()
@@ -39,14 +42,19 @@ struct SettingsView: View {
                 Text("Notification Message:")
                     .font(.headline)
 
-                TextEditor(text: $notificationMessage)
-                    .frame(height: 80)
-                    .border(Color.gray.opacity(0.5), width: 1)
-                    .cornerRadius(6)
+                NotificationMessageEditor(text: $notificationMessage)
             }
             .padding(.top, 8)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                            Text("Popover Title:")
+                                .font(.headline)
 
-            // ✅ Preview button
+                            TextField("Enter a title", text: $popoverTitle)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.trailing, 2)
+                        }
+
             Button("Send Preview Notification") {
                 sendPreviewNotification()
             }
@@ -55,87 +63,70 @@ struct SettingsView: View {
             Spacer()
         }
         .padding()
-        .frame(width: 280, height: 270)
-        .onChange(of: notificationMessage) { _, _ in
-            scheduleDailyNotification(hour: notificationHour, minute: notificationMinute)
-        }
-        .onChange(of: notificationsEnabled) { _, _ in
-            scheduleDailyNotification(hour: notificationHour, minute: notificationMinute)
-        }
+        .frame(width: 300, height: 360)
+        .onChange(of: notificationMessage) { _, _ in scheduleDailyNotification() }
+        .onChange(of: notificationsEnabled) { _, _ in scheduleDailyNotification() }
     }
 
-    // ✅ Load saved image from UserDefaults
     private func loadSavedImage() -> NSImage? {
-        if let imageData = UserDefaults.standard.data(forKey: "SavedImageData") {
-            return NSImage(data: imageData)
-        }
-        return nil
+        guard let data = UserDefaults.standard.data(forKey: "SavedImageData") else { return nil }
+        return NSImage(data: data)
     }
 
-    // ✅ Schedule daily notification (with image)
-    func scheduleDailyNotification(hour: Int, minute: Int) {
+    private func scheduleDailyNotification() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
 
         guard notificationsEnabled else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "💕 Reminder"
+        content.title = "Reminder"
         content.body = notificationMessage
         content.sound = .default
 
-        // 🔗 Attach the image if it exists
         if let image = loadSavedImage(),
            let attachment = createImageAttachment(from: image) {
             content.attachments = [attachment]
         }
 
         var dateComponents = DateComponents()
-        dateComponents.hour = hour
-        dateComponents.minute = minute
+        dateComponents.hour = notificationHour
+        dateComponents.minute = notificationMinute
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-
-        let request = UNNotificationRequest(identifier: "dailyNotification",
-                                            content: content,
-                                            trigger: trigger)
+        let request = UNNotificationRequest(identifier: "dailyNotification", content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request)
     }
 
-    // ✅ Send preview notification (with image)
-    func sendPreviewNotification() {
+    private func sendPreviewNotification() {
         let content = UNMutableNotificationContent()
-        content.title = "💕 Preview Notification"
+        content.title = "Preview Notification"
         content.body = notificationMessage
         content.sound = .default
 
-        // 🔗 Attach the image if it exists
         if let image = loadSavedImage(),
            let attachment = createImageAttachment(from: image) {
             content.attachments = [attachment]
         }
 
-        let request = UNNotificationRequest(identifier: UUID().uuidString,
-                                            content: content,
-                                            trigger: nil) // send immediately
-
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
 
-    // ✅ Helper: Convert NSImage → temp file → attachment
     private func createImageAttachment(from image: NSImage) -> UNNotificationAttachment? {
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
-        }
+        guard
+            let tiffData = image.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else { return nil }
 
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("notifImage.png")
+
         do {
             try pngData.write(to: tempURL)
             return try UNNotificationAttachment(identifier: "notifImage", url: tempURL)
         } catch {
-            print("❌ Could not save or attach image: \(error)")
+            print("Could not save or attach image: \(error)")
             return nil
         }
     }
