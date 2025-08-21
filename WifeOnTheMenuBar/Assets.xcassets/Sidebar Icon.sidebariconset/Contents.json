@@ -1,49 +1,57 @@
 {
   "images" : [
     {
-      "filename" : "Rectangle 32-3.png",
+      "filename" : "16x16 1.png",
+      "idiom" : "universal",
+      "scale" : "1x",
+      "size" : "16x16"
+    },
+    {
+      "filename" : "32x32 2.png",
+      "idiom" : "universal",
+      "scale" : "1x",
+      "size" : "32x32"
+    },
+    {
+      "filename" : "16x16.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
-      "filename" : "Rectangle 32-2.png",
+      "filename" : "32x32.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
-      "filename" : "Rectangle 32__1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "18x18"
     },
     {
-      "filename" : "Rectangle 32__5.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "18x18"
     },
     {
-      "filename" : "Rectangle 32__2.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "24x24"
     },
     {
-      "filename" : "Rectangle 32__3.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "24x24"
     },
     {
-      "filename" : "Rectangle 32-2 1.png",
+      "filename" : "32x32 1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
     },
     {
-      "filename" : "Rectangle 32-9.png",
+      "filename" : "64x64.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "32x32"

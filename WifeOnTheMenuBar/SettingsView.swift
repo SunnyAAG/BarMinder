@@ -17,7 +17,17 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 15) {
-            VStack{
+            HStack(spacing: 80){
+                Button(action: {
+                    NotificationCenter.default.post(name: NSNotification.Name("openPopoverView"), object: nil)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.gray)
                 Toggle("Enable Notifications", isOn: $notificationsEnabled)
             }
             .padding(.top, 20)
@@ -92,9 +102,8 @@ struct SettingsView: View {
         dateComponents.hour = notificationHour
         dateComponents.minute = notificationMinute
 
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        let request = UNNotificationRequest(identifier: "dailyNotification", content: content, trigger: trigger)
-
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
     }
 
